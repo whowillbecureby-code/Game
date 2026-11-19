@@ -1,80 +1,233 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>잔해의 투기장</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chaos Arena</title>
+<script src="/socket.io/socket.io.js"></script>
 <style>
-:root{color-scheme:dark;--bg:#101117;--panel:#1b1d27;--line:#343746;--text:#f4f4f7;--muted:#a5a8b8;--accent:#a78bfa;--green:#6ee7b7}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#28213d 0,#101117 48%);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh}
-main{max-width:920px;margin:auto;padding:28px 16px 50px}header{text-align:center;padding:22px 0 28px}h1{font-size:clamp(30px,6vw,48px);margin:0 0 8px;letter-spacing:-1.5px}header p{color:var(--muted);margin:0}
-.panel{background:#1b1d27ed;border:1px solid var(--line);border-radius:18px;padding:20px;margin:14px 0;box-shadow:0 14px 40px #0003}
-h2{font-size:19px;margin:0 0 15px}.row{display:flex;gap:10px;flex-wrap:wrap}input,button,select{font:inherit;border-radius:11px;border:1px solid var(--line);padding:12px 14px;background:#11131b;color:var(--text)}input{min-width:0;flex:1}button{cursor:pointer;background:var(--accent);border-color:var(--accent);color:#171323;font-weight:750}button.secondary{background:#292c39;border-color:#44485b;color:var(--text)}button:disabled{opacity:.35;cursor:not-allowed}
-.hidden{display:none!important}.hint{color:var(--muted);font-size:13px}.roomhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.tag{background:#30284a;color:#d8caff;padding:6px 10px;border-radius:99px;font-size:13px}
-.players{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}.player{background:#11131b;border:1px solid var(--line);border-radius:14px;padding:14px}.player.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}.player.dead{opacity:.42}.pname{font-weight:750;display:flex;justify-content:space-between;gap:8px}.hpbar{height:8px;background:#353746;border-radius:9px;margin:12px 0 7px;overflow:hidden}.hpfill{height:100%;background:var(--green);transition:width .2s}.stats{font-size:13px;color:var(--muted)}
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.card{min-height:110px;background:linear-gradient(145deg,#2b2740,#1c1d29);border:1px solid #51466f;color:var(--text);text-align:left;padding:14px}.card b{display:block;font-size:17px;margin-bottom:8px}.card span{font-size:13px;color:#c3bfd2}.card.attack{border-color:#79404c}.card.defend{border-color:#42617a}.card.heal{border-color:#3e755f}
-#log{max-height:210px;overflow:auto;display:flex;flex-direction:column;gap:7px;color:#c3c5d1;font-size:13px}.logline{border-bottom:1px solid #30323d;padding-bottom:7px}
-.notice{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#f4f0ff;color:#171323;padding:12px 18px;border-radius:12px;box-shadow:0 8px 30px #0007;max-width:90%;z-index:5;font-weight:650}
-@media(max-width:520px){main{padding:12px}.panel{padding:15px}.cards{grid-template-columns:1fr}.card{min-height:80px}}
+*{box-sizing:border-box}
+body{margin:0;padding:15px;background:#111522;color:white;font-family:Arial}
+main{max-width:720px;margin:auto}
+h1{text-align:center;color:#e8bd67}
+.panel{background:#222c42;padding:15px;border-radius:13px;margin:12px 0}
+input,button{padding:12px;border:0;border-radius:8px;margin:4px}
+input{background:#39445c;color:white;max-width:100%}
+button{background:#e8bd67;color:#171717;font-weight:bold}
+button:disabled{opacity:.4}
+.hidden{display:none}
+.players,.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.player,.card{background:#35415a;padding:12px;border-radius:10px}
+.card{color:white;text-align:left;border:2px solid #e8bd67;min-height:105px}
+.card strong{display:block;margin-bottom:8px;font-size:17px}
+.card small{color:#ddd}
+.hp{color:#8ce5a5;font-weight:bold}
+#log{white-space:pre-line;line-height:1.6}
 </style>
 </head>
 <body>
 <main>
-<header><h1>잔해의 투기장</h1><p>방 이름으로 모여라 · 최대 4인 생존 PvP</p></header>
-<section id="lobby" class="panel">
-<h2>전장 입장</h2>
-<div class="row" style="margin-bottom:10px"><input id="nick" maxlength="14" placeholder="닉네임" autocomplete="nickname"></div>
-<div class="row"><input id="room" maxlength="24" placeholder="방 이름"><button id="create">방 만들기</button><button id="join" class="secondary">참가하기</button></div>
-<p class="hint">방 이름을 친구에게 알려주면 같은 방에 참가할 수 있어요. 한 방 최대 4명.</p>
-</section>
-<section id="game" class="hidden">
-<div class="panel roomhead"><div><div class="hint">현재 방</div><strong id="roomTitle"></strong></div><div class="row"><span id="turnTag" class="tag">대기 중</span><button id="leave" class="secondary">나가기</button></div></div>
-<div class="panel"><div class="roomhead"><h2>플레이어</h2><span id="count" class="hint"></span></div><div id="players" class="players"></div></div>
-<div id="waiting" class="panel"><h2>전투 대기실</h2><p id="waitText" class="hint">플레이어가 모이면 방장이 게임을 시작할 수 있어요.</p><button id="start">게임 시작</button></div>
-<div id="battle" class="panel hidden"><h2>내 차례에 카드 한 장을 사용하세요</h2><div class="row" style="margin-bottom:12px"><select id="target" aria-label="공격 대상"></select></div><div class="cards">
-<button class="card attack" data-card="attack"><b>⚔ 공격</b><span>선택한 상대에게 피해 8</span></button>
-<button class="card defend" data-card="defend"><b>🛡 방어</b><span>보호막 +6 (최대 12)</span></button>
-<button class="card heal" data-card="heal"><b>✚ 회복</b><span>체력 +7 (최대 30)</span></button>
-</div><p id="myTurn" class="hint"></p></div>
-<div class="panel"><h2>전투 기록</h2><div id="log"></div></div>
-</section>
+<h1>⚔ CHAOS ARENA</h1>
+
+<div class="panel" id="lobby">
+<h3>방 만들기 / 참가</h3>
+<input id="playerName" placeholder="플레이어 이름">
+<input id="roomName" placeholder="방 이름">
+<br>
+<button id="create">방 만들기</button>
+<button id="join">방 참가</button>
+<button id="start" class="hidden">게임 시작</button>
+<p id="message">이름과 방 이름을 입력해 줘.</p>
+<p id="waiting"></p>
+</div>
+
+<div id="battle" class="hidden">
+<div class="panel">
+<h3 id="roomTitle">전장</h3>
+<h3 id="turnText"></h3>
+<div id="players" class="players"></div>
+</div>
+
+<div class="panel">
+<h3>내 손패</h3>
+<div id="hand" class="cards"></div>
+<p id="selectedText">카드를 선택해 줘.</p>
+<div id="targets"></div>
+</div>
+
+<div class="panel">
+<h3>전투 기록</h3>
+<div id="log">전투 대기 중</div>
+</div>
+</div>
 </main>
-<div id="notice" class="notice hidden"></div>
-<script src="/socket.io/socket.io.js"></script>
+
 <script>
 const socket = io();
+let myId = null;
+let state = null;
+let selected = null;
+
 const $ = id => document.getElementById(id);
-let myId = null, roomName = null, latest = null, noticeTimer;
-function notify(msg){$("notice").textContent=msg;$("notice").classList.remove("hidden");clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$("notice").classList.add("hidden"),2600)}
-function enter(data){myId=data.playerId;roomName=data.roomName;$("lobby").classList.add("hidden");$("game").classList.remove("hidden");$("roomTitle").textContent=roomName}
-function identity(){return {playerName:$("nick").value.trim(),roomName:$("room").value.trim()}}
-$("create").onclick=()=>{const d=identity();if(!d.playerName||!d.roomName)return notify("닉네임과 방 이름을 입력해 주세요.");socket.emit("createRoom",d)};
-$("join").onclick=()=>{const d=identity();if(!d.playerName||!d.roomName)return notify("닉네임과 방 이름을 입력해 주세요.");socket.emit("joinRoom",d)};
-$("start").onclick=()=>socket.emit("startGame");
-$("leave").onclick=()=>{socket.emit("leaveRoom");myId=null;roomName=null;latest=null;$("game").classList.add("hidden");$("lobby").classList.remove("hidden")};
-document.querySelectorAll("[data-card]").forEach(btn=>btn.onclick=()=>{if(!latest||latest.currentTurn!==myId)return notify("아직 네 차례가 아니에요.");socket.emit("playCard",{card:btn.dataset.card,targetId:$("target").value})});
-socket.on("joined",enter);
-socket.on("notice",notify);
-socket.on("state",state=>{
- latest=state;
- $("roomTitle").textContent=state.roomName;
- $("count").textContent=state.players.length+"/4명";
- const turn=state.players.find(p=>p.id===state.currentTurn);
- $("turnTag").textContent=state.started?(turn?turn.name+" 차례":"전투 중"):(state.winner?state.winner+" 승리":"대기 중");
- $("players").innerHTML=state.players.map(p=>'<div class="player '+(p.id===state.currentTurn&&state.started?'active ':'')+(p.hp<=0?'dead':'')+'"><div class="pname"><span>'+escapeHtml(p.name)+(p.id===myId?' (나)':'')+'</span><span>'+(p.hp<=0?'탈락':'')+'</span></div><div class="hpbar"><div class="hpfill" style="width:'+Math.max(0,p.hp/30*100)+'%"></div></div><div class="stats">HP '+p.hp+'/30 · 보호막 '+p.shield+'</div></div>').join("");
- const targets=state.players.filter(p=>p.id!==myId&&p.hp>0);
- $("target").innerHTML=targets.map(p=>'<option value="'+p.id+'">'+escapeHtml(p.name)+'</option>').join("");
- $("target").disabled=!state.started||targets.length===0;
- $("waiting").classList.toggle("hidden",state.started||!!state.winner);
- $("start").classList.toggle("hidden",myId!==state.hostId);
- $("waitText").textContent=state.players.length<2?"친구에게 방 이름을 알려주고 참가를 기다리세요.":(myId===state.hostId?"참가자가 모였어요. 게임을 시작하세요.":"방장이 게임을 시작할 때까지 기다리세요.");
- $("battle").classList.toggle("hidden",!state.started);
- $("myTurn").textContent=state.started?(state.currentTurn===myId?"지금 네 차례야!":"상대 차례를 기다리는 중…"):"";
- document.querySelectorAll("[data-card]").forEach(b=>b.disabled=!state.started||state.currentTurn!==myId);
- $("log").innerHTML=state.log.slice().reverse().map(x=>'<div class="logline">'+escapeHtml(x)+'</div>').join("");
+
+socket.on("connect", () => {
+  myId = socket.id;
 });
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-socket.on("connect_error",()=>notify("서버 연결에 실패했어요. 잠시 후 새로고침해 주세요."));
+
+socket.on("connect_error", () => {
+  $("message").textContent = "서버 연결에 실패했어. 잠시 후 새로고침해 줘.";
+});
+
+$("create").onclick = () => {
+  const playerName = $("playerName").value.trim();
+  const roomName = $("roomName").value.trim();
+
+  if (!playerName || !roomName) {
+    alert("이름과 방 이름을 입력해 줘.");
+    return;
+  }
+
+  socket.emit("createRoom", {playerName, roomName});
+};
+
+$("join").onclick = () => {
+  const playerName = $("playerName").value.trim();
+  const roomName = $("roomName").value.trim();
+
+  if (!playerName || !roomName) {
+    alert("이름과 방 이름을 입력해 줘.");
+    return;
+  }
+
+  socket.emit("joinRoom", {playerName, roomName});
+};
+
+$("start").onclick = () => {
+  socket.emit("startGame");
+};
+
+socket.on("roomJoined", data => {
+  $("message").textContent = "방 참가 완료!";
+  $("start").classList.toggle("hidden", !data.host);
+});
+
+socket.on("errorMessage", msg => {
+  $("message").textContent = msg;
+});
+
+function safe(value) {
+  return String(value).replace(/[&<>"']/g, c => ({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#39;"
+  }[c]));
+}
+
+socket.on("gameState", data => {
+  state = data;
+  selected = null;
+
+  $("lobby").classList.toggle("hidden", data.status !== "waiting");
+  $("battle").classList.toggle("hidden", data.status === "waiting");
+
+  $("roomTitle").textContent = "방: " + data.roomName;
+
+  const current = data.players.find(p => p.id === data.turn);
+
+  $("turnText").textContent =
+    data.status === "finished"
+      ? "🏆 승리자: " + data.winner
+      : "현재 턴: " + (current ? current.name : "대기 중");
+
+  $("waiting").textContent =
+    "참가자: " + data.players.map(p => p.name).join(", ");
+
+  $("players").innerHTML = data.players.map(p =>
+    '<div class="player">' +
+    '<b>' + safe(p.name) + '</b>' +
+    '<p class="hp">HP: ' + p.hp + '/100</p>' +
+    '<p>보호막: ' + p.shield + '</p>' +
+    '<p>' + (p.poison > 0 ? '☠ 중독 ' + p.poison + '턴' : '') +
+    (p.alive ? '' : ' · 탈락') + '</p>' +
+    '</div>'
+  ).join("");
+
+  $("log").textContent =
+    (data.log || []).join("\n") || "전투 시작!";
+
+  renderHand(data.hand || []);
+  renderTargets();
+});
+
+function renderHand(hand) {
+  const canPlay =
+    state.status === "playing" && state.turn === myId;
+
+  $("hand").innerHTML = "";
+
+  hand.forEach(card => {
+    const button = document.createElement("button");
+    button.className = "card";
+    button.disabled = !canPlay;
+
+    button.innerHTML =
+      "<strong>" + safe(card.name) + "</strong>" +
+      "<small>" + safe(card.text || card.name) + "</small>";
+
+    button.onclick = () => {
+      selected = card;
+      $("selectedText").textContent = card.name + " 선택됨";
+      renderTargets();
+    };
+
+    $("hand").appendChild(button);
+  });
+
+  if (!canPlay && state.status === "playing") {
+    $("selectedText").textContent = "다른 플레이어의 턴이야.";
+  }
+}
+
+function renderTargets() {
+  $("targets").innerHTML = "";
+
+  if (!selected || !state || state.turn !== myId) return;
+
+  const needsTarget =
+    ["attack", "poison", "drain"].includes(selected.type);
+
+  if (!needsTarget) {
+    addTarget("카드 사용", null);
+    return;
+  }
+
+  state.players
+    .filter(p => p.alive && p.id !== myId)
+    .forEach(p => {
+      addTarget(p.name + "에게 사용", p.id);
+    });
+}
+
+function addTarget(label, targetId) {
+  const button = document.createElement("button");
+  button.textContent = label;
+
+  button.onclick = () => {
+    socket.emit("playCard", {
+      cardId: selected.id,
+      targetId: targetId
+    });
+
+    selected = null;
+    $("selectedText").textContent = "카드 사용 완료!";
+    $("targets").innerHTML = "";
+  };
+
+  $("targets").appendChild(button);
+}
 </script>
 </body>
 </html>
