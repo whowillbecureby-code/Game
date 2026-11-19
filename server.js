@@ -157,8 +157,9 @@ io.on("connection", socket => {
     const card = CARDS[cardId];
     const target = room.players.find(p => p.id === targetId && p.hp > 0);
 
-    if (["attack", "heal", "poison", "drain"].includes(card.type) &&
-        (!target || target.id === player.id && card.type !== "heal")) return;
+    // 공격·맹독·흡수만 상대 대상을 필요로 함
+    if (["attack", "poison", "drain"].includes(card.type) &&
+        (!target || target.id === player.id)) return;
 
     function damage(targetPlayer, amount) {
       if (targetPlayer.shield > 0) {
@@ -166,6 +167,7 @@ io.on("connection", socket => {
         targetPlayer.shield -= blocked;
         amount -= blocked;
       }
+
       targetPlayer.hp = Math.max(0, targetPlayer.hp - amount);
 
       if (targetPlayer.reflect && amount > 0) {
@@ -185,8 +187,9 @@ io.on("connection", socket => {
       if (cardId === "reflect") player.reflect = true;
     }
 
+    // 치유는 자기 자신에게 적용
     if (card.type === "heal") {
-      target.hp = Math.min(100, target.hp + card.amount);
+      player.hp = Math.min(100, player.hp + card.amount);
     }
 
     if (card.type === "poison") {
@@ -209,6 +212,7 @@ io.on("connection", socket => {
       player.hp = Math.min(100, player.hp + card.amount);
     }
 
+    // 사용한 카드를 제거하고 턴 진행
     player.hand.splice(index, 1);
 
     room.players.forEach(p => {
@@ -233,10 +237,12 @@ io.on("connection", socket => {
       rooms.delete(roomName);
     } else {
       if (room.host === socket.id) room.host = room.players[0].id;
+
       if (room.status === "playing") {
         room.turn = Math.max(0, room.turn - 1);
         nextTurn(room);
       }
+
       sendStates(room);
     }
   });
