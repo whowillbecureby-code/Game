@@ -45,3 +45,55 @@ test("two players can join a room and the host can start a match", async ({ brow
     await guestContext.close();
   }
 });
+
+test("two players can take six consecutive card-play turns", async ({ browser }) => {
+  const hostContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+
+  try {
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await host.goto("/");
+    await host.locator("#playerName").fill("SimulationHost");
+    await host.locator("#roomName").fill("pw-card-simulation");
+    await host.getByRole("button", { name: "방 만들기" }).click();
+    await expect(host.locator("#message")).toHaveText("방 참가 완료!");
+
+    await guest.goto("/");
+    await guest.locator("#playerName").fill("SimulationGuest");
+    await guest.locator("#roomName").fill("pw-card-simulation");
+    await guest.getByRole("button", { name: "방 참가" }).click();
+    await expect(guest.locator("#message")).toHaveText("방 참가 완료!");
+
+    await host.locator("#start").click();
+    await expect(host.locator("#battle")).toBeVisible();
+    await expect(guest.locator("#battle")).toBeVisible();
+
+    for (let turn = 0; turn < 6; turn++) {
+      const current = turn % 2 === 0 ? host : guest;
+      const next = turn % 2 === 0 ? guest : host;
+      const currentName = turn % 2 === 0 ? "SimulationHost" : "SimulationGuest";
+      const nextName = turn % 2 === 0 ? "SimulationGuest" : "SimulationHost";
+
+      await expect(current.locator("#turnText")).toContainText(currentName);
+      const card = current.locator("#hand .card").first();
+      await expect(card).toBeEnabled();
+      const cardName = await card.locator("strong").innerText();
+
+      await card.click();
+      const useButton = current.locator("#targets button").first();
+      await expect(useButton).toBeVisible();
+      await useButton.click();
+
+      await expect(current.locator("#log")).toContainText(
+        currentName + " 님이 " + cardName + " 사용"
+      );
+      await expect(next.locator("#turnText")).toContainText(nextName);
+    }
+  } finally {
+    await hostContext.close();
+    await guestContext.close();
+  }
+});
+
