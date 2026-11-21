@@ -6,80 +6,195 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chaos Arena</title>
 <script src="/socket.io/socket.io.js"></script>
+
 <style>
-*{box-sizing:border-box}
-body{margin:0;padding:15px;background:#111522;color:white;font-family:Arial}
-main{max-width:720px;margin:auto}
-h1{text-align:center;color:#e8bd67}
-.panel{background:#222c42;padding:15px;border-radius:13px;margin:12px 0}
-input,button{padding:12px;border:0;border-radius:8px;margin:4px}
-input{background:#39445c;color:white;max-width:100%}
-button{background:#e8bd67;color:#171717;font-weight:bold}
-button:disabled{opacity:.4}
-.hidden{display:none}
-.players,.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
-.player,.card{background:#35415a;padding:12px;border-radius:10px}
-.card{color:white;text-align:left;border:2px solid #e8bd67;min-height:105px}
-.card strong{display:block;margin-bottom:8px;font-size:17px}
-.card small{color:#ddd}
-.hp{color:#8ce5a5;font-weight:bold}
-#log{white-space:pre-line;line-height:1.6}
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 15px;
+  background: #111522;
+  color: white;
+  font-family: Arial;
+}
+
+main {
+  max-width: 720px;
+  margin: auto;
+}
+
+h1 {
+  text-align: center;
+  color: #e8bd67;
+}
+
+.panel {
+  background: #222c42;
+  padding: 15px;
+  border-radius: 13px;
+  margin: 12px 0;
+}
+
+input, button {
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  margin: 4px;
+}
+
+input {
+  background: #39445c;
+  color: white;
+  max-width: 100%;
+}
+
+button {
+  background: #e8bd67;
+  color: #171717;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.hidden {
+  display: none;
+}
+
+.players, .cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 9px;
+}
+
+.player, .card {
+  background: #35415a;
+  padding: 12px;
+  border-radius: 10px;
+}
+
+.card {
+  color: white;
+  text-align: left;
+  border: 2px solid #e8bd67;
+  min-height: 105px;
+}
+
+.card strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 17px;
+}
+
+.card small {
+  color: #ddd;
+}
+
+.hp {
+  color: #8ce5a5;
+  font-weight: bold;
+}
+
+#log {
+  white-space: pre-line;
+  line-height: 1.6;
+}
+
+#targets button {
+  margin: 5px;
+}
+
 </style>
 </head>
+
 <body>
 <main>
+
 <h1>⚔ CHAOS ARENA</h1>
 
 <div class="panel" id="lobby">
+
 <h3>방 만들기 / 참가</h3>
+
 <input id="playerName" placeholder="플레이어 이름">
 <input id="roomName" placeholder="방 이름">
+
 <br>
+
 <button id="create">방 만들기</button>
 <button id="join">방 참가</button>
 <button id="start" class="hidden">게임 시작</button>
+
 <p id="message">이름과 방 이름을 입력해 줘.</p>
 <p id="waiting"></p>
+
 </div>
 
 <div id="battle" class="hidden">
+
 <div class="panel">
+
 <h3 id="roomTitle">전장</h3>
 <h3 id="turnText"></h3>
+
 <div id="players" class="players"></div>
+
 </div>
 
 <div class="panel">
+
 <h3>내 손패</h3>
+
 <div id="hand" class="cards"></div>
+
 <p id="selectedText">카드를 선택해 줘.</p>
+
 <div id="targets"></div>
+
 </div>
 
 <div class="panel">
+
 <h3>전투 기록</h3>
 <div id="log">전투 대기 중</div>
+
 </div>
+
 </div>
+
 </main>
 
 <script>
+
 const socket = io();
+
 let myId = null;
 let state = null;
 let selected = null;
+let pending = false;
 
 const $ = id => document.getElementById(id);
+
+// 서버 연결
 
 socket.on("connect", () => {
   myId = socket.id;
 });
 
 socket.on("connect_error", () => {
-  $("message").textContent = "서버 연결에 실패했어. 잠시 후 새로고침해 줘.";
+  $("message").textContent =
+    "서버 연결에 실패했어. 잠시 후 새로고침해 줘.";
 });
 
+// 방 만들기
+
 $("create").onclick = () => {
+
   const playerName = $("playerName").value.trim();
   const roomName = $("roomName").value.trim();
 
@@ -88,10 +203,17 @@ $("create").onclick = () => {
     return;
   }
 
-  socket.emit("createRoom", {playerName, roomName});
+  socket.emit("createRoom", {
+    playerName,
+    roomName
+  });
+
 };
+
+// 방 참가
 
 $("join").onclick = () => {
+
   const playerName = $("playerName").value.trim();
   const roomName = $("roomName").value.trim();
 
@@ -100,77 +222,140 @@ $("join").onclick = () => {
     return;
   }
 
-  socket.emit("joinRoom", {playerName, roomName});
+  socket.emit("joinRoom", {
+    playerName,
+    roomName
+  });
+
 };
+
+// 게임 시작
 
 $("start").onclick = () => {
   socket.emit("startGame");
 };
 
+// 방 참가 결과
+
 socket.on("roomJoined", data => {
+
   $("message").textContent = "방 참가 완료!";
-  $("start").classList.toggle("hidden", !data.host);
+
+  $("start").classList.toggle(
+    "hidden",
+    !data.host
+  );
+
 });
+
+// 오류 메시지
 
 socket.on("errorMessage", msg => {
   $("message").textContent = msg;
 });
 
+// 안전한 문자열 처리
+
 function safe(value) {
+
   return String(value).replace(/[&<>"']/g, c => ({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#39;"
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
   }[c]));
+
 }
 
+// 게임 상태 수신
+
 socket.on("gameState", data => {
+
   state = data;
-  selected = null;
 
-  $("lobby").classList.toggle("hidden", data.status !== "waiting");
-  $("battle").classList.toggle("hidden", data.status === "waiting");
+  // 서버에서 상태가 갱신되면 요청 잠금 해제
+  pending = false;
 
-  $("roomTitle").textContent = "방: " + data.roomName;
+  // 이전 선택이 현재 손패에 남아 있는지 확인
+  if (
+    selected &&
+    !(data.hand || []).some(c => c.id === selected.id)
+  ) {
+    selected = null;
+  }
 
-  const current = data.players.find(p => p.id === data.turn);
+  $("lobby").classList.toggle(
+    "hidden",
+    data.status !== "waiting"
+  );
+
+  $("battle").classList.toggle(
+    "hidden",
+    data.status === "waiting"
+  );
+
+  $("roomTitle").textContent =
+    "방: " + data.roomName;
+
+  const current = data.players.find(
+    p => p.id === data.turn
+  );
 
   $("turnText").textContent =
     data.status === "finished"
       ? "🏆 승리자: " + data.winner
-      : "현재 턴: " + (current ? current.name : "대기 중");
+      : "현재 턴: " + (
+          current ? current.name : "대기 중"
+        );
 
   $("waiting").textContent =
-    "참가자: " + data.players.map(p => p.name).join(", ");
+    "참가자: " +
+    data.players.map(p => p.name).join(", ");
 
   $("players").innerHTML = data.players.map(p =>
+
     '<div class="player">' +
-    '<b>' + safe(p.name) + '</b>' +
-    '<p class="hp">HP: ' + p.hp + '/100</p>' +
-    '<p>보호막: ' + p.shield + '</p>' +
-    '<p>' + (p.poison > 0 ? '☠ 중독 ' + p.poison + '턴' : '') +
-    (p.alive ? '' : ' · 탈락') + '</p>' +
+      '<b>' + safe(p.name) + '</b>' +
+      '<p class="hp">HP: ' + p.hp + '/100</p>' +
+      '<p>보호막: ' + p.shield + '</p>' +
+      '<p>' +
+        (p.poison > 0
+          ? '☠ 중독 ' + p.poison + '턴'
+          : '') +
+        (p.alive ? '' : ' · 탈락') +
+      '</p>' +
     '</div>'
+
   ).join("");
 
   $("log").textContent =
     (data.log || []).join("\n") || "전투 시작!";
 
   renderHand(data.hand || []);
+
   renderTargets();
+
 });
 
+// 손패 출력
+
 function renderHand(hand) {
+
   const canPlay =
-    state.status === "playing" && state.turn === myId;
+    state &&
+    state.status === "playing" &&
+    state.turn === myId &&
+    !pending;
 
   $("hand").innerHTML = "";
 
   hand.forEach(card => {
+
     const button = document.createElement("button");
+
     button.className = "card";
+
     button.disabled = !canPlay;
 
     button.innerHTML =
@@ -178,56 +363,136 @@ function renderHand(hand) {
       "<small>" + safe(card.text || card.name) + "</small>";
 
     button.onclick = () => {
+
+      if (!canPlay || pending) return;
+
       selected = card;
-      $("selectedText").textContent = card.name + " 선택됨";
+
+      $("selectedText").textContent =
+        card.name + " 선택됨";
+
+      renderHand(hand);
       renderTargets();
+
     };
 
+    if (selected && selected.id === card.id) {
+      button.style.borderColor = "#8ce5a5";
+    }
+
     $("hand").appendChild(button);
+
   });
 
   if (!canPlay && state.status === "playing") {
-    $("selectedText").textContent = "다른 플레이어의 턴이야.";
+    $("selectedText").textContent =
+      "다른 플레이어의 턴이야.";
   }
+
 }
 
+// 대상 선택창
+
 function renderTargets() {
+
   $("targets").innerHTML = "";
 
-  if (!selected || !state || state.turn !== myId) return;
+  if (
+    !selected ||
+    !state ||
+    state.turn !== myId ||
+    pending
+  ) return;
 
-  const needsTarget =
-    ["attack", "poison", "drain"].includes(selected.type);
+  const needsTarget = [
+    "attack",
+    "poison",
+    "drain"
+  ].includes(selected.type);
 
   if (!needsTarget) {
+
     addTarget("카드 사용", null);
+
     return;
   }
 
-  state.players
-    .filter(p => p.alive && p.id !== myId)
-    .forEach(p => {
-      addTarget(p.name + "에게 사용", p.id);
-    });
+  const targets = state.players.filter(
+    p => p.alive && p.id !== myId
+  );
+
+  if (targets.length === 0) {
+    $("selectedText").textContent =
+      "공격할 상대가 없어.";
+    return;
+  }
+
+  targets.forEach(p => {
+
+    addTarget(
+      p.name + "에게 사용",
+      p.id
+    );
+
+  });
+
 }
 
+// 카드 사용 요청
+
 function addTarget(label, targetId) {
+
   const button = document.createElement("button");
+
   button.textContent = label;
 
   button.onclick = () => {
-    socket.emit("playCard", {
-      cardId: selected.id,
-      targetId: targetId
+
+    if (
+      !selected ||
+      !state ||
+      pending ||
+      state.turn !== myId
+    ) return;
+
+    const cardId = selected.id;
+
+    pending = true;
+
+    $("selectedText").textContent =
+      "카드 사용 요청 중...";
+
+    $("targets").innerHTML = "";
+
+    renderHand(state.hand || []);
+
+    console.log("카드 사용 요청:", {
+      cardId,
+      targetId
     });
 
-    selected = null;
-    $("selectedText").textContent = "카드 사용 완료!";
-    $("targets").innerHTML = "";
+    socket.emit("playCard", {
+      cardId,
+      targetId
+    });
+
   };
 
   $("targets").appendChild(button);
+
 }
+
+// 연결 종료 안내
+
+socket.on("disconnect", () => {
+
+  pending = false;
+
+  $("message").textContent =
+    "서버 연결이 끊어졌어. 다시 접속해 줘.";
+
+});
+
 </script>
 </body>
 </html>
