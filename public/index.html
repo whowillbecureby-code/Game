@@ -272,6 +272,8 @@ function safe(value) {
 
 socket.on("gameState", data => {
 
+  // 서버가 이 연결에 전달한 플레이어 ID를 기준으로 턴을 판정한다.
+  if (data.playerId) myId = data.playerId;
   state = data;
 
   // 서버에서 상태가 갱신되면 요청 잠금 해제
