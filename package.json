@@ -6,13 +6,16 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "node --test tests/server.test.js",
+    "test": "npm run test:unit && npm run test:e2e"
   },
   "dependencies": {
     "express": "^4.21.2",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.1"
+    "@playwright/test": "^1.56.1",
+    "socket.io-client": "^4.8.1"
   }
 }
