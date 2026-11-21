@@ -341,6 +341,7 @@ test("poison damage is absorbed by an active shield", async () => {
   try {
     match.room.players[1].poison = 1;
     match.room.players[1].shield = 3;
+    match.room.players[0].hand = ["guard"];
     match.room.players[1].hand = ["strike"];
     await play(match.clients, 0, "guard");
     match.room.players[1].hand = ["strike"];
