@@ -37,14 +37,18 @@ function drawCard(player) {
   ];
 }
 
+// 생존 플레이어
 function alivePlayers(room) {
   return room.players.filter(p => p.hp > 0);
 }
 
+// 다음 턴
 function nextTurn(room) {
-  if (alivePlayers(room).length <= 1) {
+  const alive = alivePlayers(room);
+
+  if (alive.length <= 1) {
     room.status = "finished";
-    room.winner = alivePlayers(room)[0]?.name || "없음";
+    room.winner = alive[0]?.name || "없음";
     return;
   }
 
@@ -55,17 +59,22 @@ function nextTurn(room) {
     count++;
   } while (
     room.players[room.turn].hp <= 0 &&
-    count <= room.players.length
+    count < room.players.length
   );
 
   const player = room.players[room.turn];
 
+  // 최대 5장, 손패 중복 방지
   if (player.hand.length < 5) {
     const card = drawCard(player);
-    if (card) player.hand.push(card);
+
+    if (card) {
+      player.hand.push(card);
+    }
   }
 }
 
+// 게임 상태 전송
 function sendStates(room) {
   room.players.forEach(player => {
     io.to(player.id).emit("gameState", {
@@ -94,8 +103,12 @@ function sendStates(room) {
 io.on("connection", socket => {
 
   // 방 만들기
-  socket.on("createRoom", ({ roomName, playerName }) => {
-    if (!roomName || !playerName || rooms.has(roomName)) {
+  socket.on("createRoom", ({ roomName, playerName } = {}) => {
+    if (
+      !roomName ||
+      !playerName ||
+      rooms.has(roomName)
+    ) {
       socket.emit(
         "errorMessage",
         "방 이름이 이미 있거나 입력이 잘못됐어."
@@ -113,6 +126,7 @@ io.on("connection", socket => {
         hp: 100,
         shield: 0,
         poison: 0,
+        reflect: false,
         hand: []
       }],
 
@@ -122,6 +136,7 @@ io.on("connection", socket => {
     };
 
     rooms.set(roomName, room);
+
     socket.join(roomName);
     socket.data.roomName = roomName;
 
@@ -134,7 +149,7 @@ io.on("connection", socket => {
   });
 
   // 방 참가
-  socket.on("joinRoom", ({ roomName, playerName }) => {
+  socket.on("joinRoom", ({ roomName, playerName } = {}) => {
     const room = rooms.get(roomName);
 
     if (
@@ -156,6 +171,7 @@ io.on("connection", socket => {
       hp: 100,
       shield: 0,
       poison: 0,
+      reflect: false,
       hand: []
     });
 
@@ -179,9 +195,12 @@ io.on("connection", socket => {
       room.host !== socket.id ||
       room.status !== "waiting" ||
       room.players.length < 2
-    ) return;
+    ) {
+      return;
+    }
 
     room.status = "playing";
+    room.turn = 0;
 
     room.players.forEach(p => {
       p.hand = [];
@@ -196,40 +215,84 @@ io.on("connection", socket => {
   });
 
   // 카드 사용
-  socket.on("playCard", ({ cardId, targetId }) => {
+  socket.on("playCard", (data = {}) => {
+    const { cardId, targetId } = data;
+
+    console.log("카드 요청:", {
+      player: socket.id,
+      cardId,
+      targetId
+    });
+
     const room = rooms.get(socket.data.roomName);
 
-    if (!room || room.status !== "playing") return;
+    if (!room || room.status !== "playing") {
+      socket.emit("errorMessage", "게임이 진행 중이 아니야.");
+      return;
+    }
 
     const player = room.players.find(
       p => p.id === socket.id
     );
 
+    if (!player) {
+      socket.emit("errorMessage", "플레이어를 찾을 수 없어.");
+      return;
+    }
+
     if (
-      !player ||
       !room.players[room.turn] ||
       room.players[room.turn].id !== socket.id
-    ) return;
+    ) {
+      socket.emit("errorMessage", "네 턴이 아니야.");
+      return;
+    }
+
+    if (player.hp <= 0) {
+      socket.emit("errorMessage", "탈락한 플레이어야.");
+      return;
+    }
 
     const index = player.hand.indexOf(cardId);
 
-    if (index === -1) return;
+    if (index === -1) {
+      socket.emit("errorMessage", "손패에 없는 카드야.");
+      return;
+    }
 
     const card = CARDS[cardId];
 
-    if (!card) return;
+    if (!card) {
+      socket.emit("errorMessage", "존재하지 않는 카드야.");
+      return;
+    }
 
-    const target = room.players.find(
-      p => p.id === targetId && p.hp > 0
-    );
+    const needsTarget = [
+      "attack",
+      "poison",
+      "drain"
+    ].includes(card.type);
 
-    // 공격, 맹독, 흡수는 상대방 지정 필요
-    if (
-      ["attack", "poison", "drain"].includes(card.type) &&
-      (!target || target.id === player.id)
-    ) return;
+    let target = null;
 
+    if (needsTarget) {
+      target = room.players.find(
+        p => p.id === targetId && p.hp > 0
+      );
+
+      if (!target || target.id === player.id) {
+        socket.emit(
+          "errorMessage",
+          "공격 대상을 다시 선택해 줘."
+        );
+        return;
+      }
+    }
+
+    // 피해 계산
     function damage(targetPlayer, amount) {
+      if (!targetPlayer || targetPlayer.hp <= 0) return;
+
       if (targetPlayer.shield > 0) {
         const blocked = Math.min(
           targetPlayer.shield,
@@ -257,12 +320,13 @@ io.on("connection", socket => {
 
     // 일반 공격 및 혼돈의 일격
     if (card.type === "attack") {
-      damage(
-        target,
-        card.random
-          ? Math.floor(Math.random() * 25) + 1
-          : card.damage
-      );
+      const amount = card.random
+        ? Math.floor(Math.random() * 25) + 1
+        : card.damage;
+
+      console.log("공격 데미지:", amount);
+
+      damage(target, amount);
     }
 
     // 방어 및 반사
@@ -321,7 +385,11 @@ io.on("connection", socket => {
     // 사용한 카드 제거
     player.hand.splice(index, 1);
 
-    // 현재 턴을 진행한 플레이어에게만 독 데미지 적용
+    console.log(
+      player.name + " 님이 " + card.name + " 사용"
+    );
+
+    // 현재 플레이어의 독 데미지
     if (player.hp > 0 && player.poison > 0) {
       damage(player, 3);
       player.poison--;
@@ -330,8 +398,10 @@ io.on("connection", socket => {
     // 다음 턴
     nextTurn(room);
 
-    // 상태 전송
+    // 모든 플레이어에게 최신 상태 전송
     sendStates(room);
+
+    console.log("다음 턴:", room.players[room.turn]?.name);
   });
 
   // 접속 종료
@@ -347,29 +417,33 @@ io.on("connection", socket => {
 
     if (removedIndex === -1) return;
 
+    const wasPlaying = room.status === "playing";
+    const wasCurrentTurn = removedIndex === room.turn;
+
     room.players.splice(removedIndex, 1);
 
     if (room.players.length === 0) {
       rooms.delete(roomName);
-    } else {
-      if (room.host === socket.id) {
-        room.host = room.players[0].id;
-      }
-
-      if (room.status === "playing") {
-        if (removedIndex < room.turn) {
-          room.turn--;
-        } else if (removedIndex === room.turn) {
-          room.turn--;
-        }
-
-        room.turn = Math.max(0, room.turn);
-
-        nextTurn(room);
-      }
-
-      sendStates(room);
+      return;
     }
+
+    if (room.host === socket.id) {
+      room.host = room.players[0].id;
+    }
+
+    if (wasPlaying) {
+      if (removedIndex < room.turn) {
+        room.turn--;
+      } else if (wasCurrentTurn) {
+        room.turn--;
+      }
+
+      room.turn = Math.max(0, room.turn);
+
+      nextTurn(room);
+    }
+
+    sendStates(room);
   });
 
 });
