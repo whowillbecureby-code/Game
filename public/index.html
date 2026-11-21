@@ -276,6 +276,12 @@ socket.on("gameState", data => {
   if (data.playerId) myId = data.playerId;
   state = data;
 
+  // 방장이 바뀌면 새 방장에게 게임 시작 버튼을 표시한다.
+  $("start").classList.toggle(
+    "hidden",
+    !(data.isHost && data.status === "waiting")
+  );
+
   // 서버에서 상태가 갱신되면 요청 잠금 해제
   pending = false;
 
