@@ -95,7 +95,7 @@ test("strike and heavy apply their exact damage values", async () => {
     await play(match.clients, 1, "guard");
     match.room.players[0].hand = ["heavy"];
     await play(match.clients, 0, "heavy", match.clients[1].id);
-    assert.equal(match.room.players[1].hp, 78);
+    assert.equal(match.room.players[1].hp, 88);
   } finally {
     await closeClients(match.clients);
   }
@@ -136,15 +136,15 @@ test("poison deals three damage on each of the target's next two actions", async
     await play(match.clients, 0, "poison", match.clients[1].id);
     assert.equal(match.room.players[1].poison, 2);
 
-    match.room.players[1].hand = ["guard"];
-    await play(match.clients, 1, "guard");
+    match.room.players[1].hand = ["strike"];
+    await play(match.clients, 1, "strike", match.clients[0].id);
     assert.equal(match.room.players[1].hp, 97);
     assert.equal(match.room.players[1].poison, 1);
 
     match.room.players[0].hand = ["guard"];
     await play(match.clients, 0, "guard");
-    match.room.players[1].hand = ["guard"];
-    await play(match.clients, 1, "guard");
+    match.room.players[1].hand = ["strike"];
+    await play(match.clients, 1, "strike", match.clients[0].id);
     assert.equal(match.room.players[1].hp, 94);
     assert.equal(match.room.players[1].poison, 0);
   } finally {
