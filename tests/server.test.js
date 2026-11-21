@@ -301,3 +301,54 @@ test("room capacity is limited to four players", async () => {
     await closeClients([...match.clients, fifth]);
   }
 });
+
+test("a complete two-player match reaches a winner through normal card turns", async () => {
+  const originalRandom = Math.random;
+  let match;
+  try {
+    // Stable draws make the test reproducible; both players still play through
+    // the actual Socket.IO turn and damage handlers until the match ends.
+    Math.random = () => 0;
+    match = await createMatch();
+    let turns = 0;
+
+    while (match.room.status === "playing" && turns < 40) {
+      const actorIndex = match.room.turn;
+      const targetIndex = actorIndex === 0 ? 1 : 0;
+      assert.ok(match.room.players[actorIndex].hand.includes("strike"));
+      await play(
+        match.clients,
+        actorIndex,
+        "strike",
+        match.clients[targetIndex].id
+      );
+      turns++;
+    }
+
+    assert.ok(turns > 0 && turns < 40, "the match should finish within forty turns");
+    assert.equal(match.room.status, "finished");
+    assert.ok(["Host", "Guest"].includes(match.room.winner));
+    assert.equal(match.room.players.filter(player => player.hp > 0).length, 1);
+    assert.equal(match.room.players.filter(player => player.hp === 0).length, 1);
+  } finally {
+    Math.random = originalRandom;
+    if (match) await closeClients(match.clients);
+  }
+});
+
+test("poison damage is absorbed by an active shield", async () => {
+  const match = await createMatch();
+  try {
+    match.room.players[1].poison = 1;
+    match.room.players[1].shield = 3;
+    match.room.players[1].hand = ["strike"];
+    await play(match.clients, 0, "guard");
+    match.room.players[1].hand = ["strike"];
+    await play(match.clients, 1, "strike", match.clients[0].id);
+    assert.equal(match.room.players[1].hp, 100);
+    assert.equal(match.room.players[1].shield, 0);
+    assert.equal(match.room.players[1].poison, 0);
+  } finally {
+    await closeClients(match.clients);
+  }
+});
