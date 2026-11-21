@@ -441,7 +441,15 @@ io.on("connection", socket => {
     }
 
     if (wasPlaying) {
-      if (wasCurrentTurn) {
+      // A non-active player can leave while the current player remains.
+      // Check the win condition after every departure, not only when the
+      // departing player owned the current turn.
+      const alive = alivePlayers(room);
+
+      if (alive.length <= 1) {
+        room.status = "finished";
+        room.winner = alive[0]?.name || "없음";
+      } else if (wasCurrentTurn) {
         room.turn = removedIndex - 1;
         nextTurn(room);
       } else if (removedIndex < room.turn) {
