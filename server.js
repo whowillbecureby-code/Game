@@ -79,6 +79,7 @@ function sendStates(room) {
   room.players.forEach(player => {
     io.to(player.id).emit("gameState", {
       playerId: player.id,
+      isHost: room.host === player.id,
       roomName: room.name,
       status: room.status,
       turn: room.players[room.turn]?.id,
