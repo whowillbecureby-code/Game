@@ -178,7 +178,7 @@ io.on("connection", socket => {
 
     if (card.type === "attack") {
       damage(target, card.random
-        ? Math.floor(Math.random() * 19)
+        ? Math.floor(Math.random() * 25) + 1
         : card.damage);
     }
 
