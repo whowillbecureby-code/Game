@@ -91,11 +91,11 @@ test("strike and heavy apply their exact damage values", async () => {
     await play(match.clients, 0, "strike", match.clients[1].id);
     assert.equal(match.room.players[1].hp, 92);
 
-    match.room.players[0].hand = ["heavy"];
+    match.room.players[1].hand = ["guard"];
     await play(match.clients, 1, "guard");
-    match.room.players[1].hand = ["heavy"];
-    await play(match.clients, 1, "heavy", match.clients[0].id);
-    assert.equal(match.room.players[0].hp, 86);
+    match.room.players[0].hand = ["heavy"];
+    await play(match.clients, 0, "heavy", match.clients[1].id);
+    assert.equal(match.room.players[1].hp, 78);
   } finally {
     await closeClients(match.clients);
   }
