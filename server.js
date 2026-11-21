@@ -215,12 +215,11 @@ io.on("connection", socket => {
     // 사용한 카드를 제거하고 턴 진행
     player.hand.splice(index, 1);
 
-    room.players.forEach(p => {
-      if (p.hp > 0 && p.poison > 0) {
-        damage(p, 3);
-        p.poison--;
-      }
-    });
+    // 현재 턴을 진행한 플레이어에게만 독 데미지 적용
+if (player.hp > 0 && player.poison > 0) {
+  damage(player, 3);
+  player.poison--;
+}
 
     nextTurn(room);
     sendStates(room);
