@@ -456,6 +456,12 @@ io.on("connection", socket => {
 
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+// Export the live server objects so automated integration tests can exercise
+// the real Socket.IO handlers without exposing a test-only network endpoint.
+module.exports = { server, io, rooms, CARDS };
