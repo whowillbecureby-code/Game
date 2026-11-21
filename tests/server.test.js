@@ -20,7 +20,7 @@ function waitFor(socket, event, timeout = 5000) {
   });
 }
 
-async function createMatch(names = ["Host", "Guest"]) {
+async function createMatch(names = ["Host", "Guest"], { start = true } = {}) {
   const roomName = "unit-room-" + (++roomSequence);
   const clients = names.map(() => connect(baseUrl, {
     transports: ["websocket"],
@@ -47,9 +47,11 @@ async function createMatch(names = ["Host", "Guest"]) {
     await joined;
   }
 
-  const initialStates = clients.map(client => waitFor(client, "gameState"));
-  clients[0].emit("startGame");
-  await Promise.all(initialStates);
+  if (start) {
+    const initialStates = clients.map(client => waitFor(client, "gameState"));
+    clients[0].emit("startGame");
+    await Promise.all(initialStates);
+  }
 
   return { roomName, room: rooms.get(roomName), clients };
 }
@@ -247,6 +249,20 @@ test("a non-active player's disconnect still ends a two-player match", async () 
   }
 });
 
+test("disconnecting the active player also declares the remaining player winner", async () => {
+  const match = await createMatch();
+  try {
+    match.room.turn = 1;
+    const hostState = waitFor(match.clients[0], "gameState");
+    match.clients[1].disconnect();
+    await hostState;
+    assert.equal(match.room.status, "finished");
+    assert.equal(match.room.winner, "Host");
+  } finally {
+    await closeClients(match.clients);
+  }
+});
+
 test("a four-player turn skips eliminated players", async () => {
   const match = await createMatch(["Host", "Guest", "Third", "Fourth"]);
   try {
@@ -273,7 +289,7 @@ test("a player cannot play out of turn", async () => {
 });
 
 test("room capacity is limited to four players", async () => {
-  const match = await createMatch(["Host", "Guest", "Third", "Fourth"]);
+  const match = await createMatch(["Host", "Guest", "Third", "Fourth"], { start: false });
   const fifth = connect(baseUrl, { transports: ["websocket"], reconnection: false });
   try {
     if (!fifth.connected) await waitFor(fifth, "connect");
