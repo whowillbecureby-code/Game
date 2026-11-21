@@ -78,10 +78,12 @@ function nextTurn(room) {
 function sendStates(room) {
   room.players.forEach(player => {
     io.to(player.id).emit("gameState", {
+      playerId: player.id,
       roomName: room.name,
       status: room.status,
       turn: room.players[room.turn]?.id,
       winner: room.winner,
+      log: room.log || [],
 
       players: room.players.map(p => ({
         id: p.id,
@@ -132,7 +134,8 @@ io.on("connection", socket => {
 
       turn: 0,
       status: "waiting",
-      winner: null
+      winner: null,
+      log: ["방이 만들어졌어."]
     };
 
     rooms.set(roomName, room);
@@ -174,6 +177,7 @@ io.on("connection", socket => {
       reflect: false,
       hand: []
     });
+    room.log.push(playerName + " 님이 방에 참가했어.");
 
     socket.join(roomName);
     socket.data.roomName = roomName;
@@ -201,6 +205,8 @@ io.on("connection", socket => {
 
     room.status = "playing";
     room.turn = 0;
+    room.winner = null;
+    room.log.push("게임이 시작됐어. " + room.players[0].name + " 님부터 시작!");
 
     room.players.forEach(p => {
       p.hand = [];
@@ -385,9 +391,10 @@ io.on("connection", socket => {
     // 사용한 카드 제거
     player.hand.splice(index, 1);
 
-    console.log(
-      player.name + " 님이 " + card.name + " 사용"
-    );
+    const actionText = player.name + " 님이 " + card.name + " 사용";
+    console.log(actionText);
+    room.log.push(actionText);
+    if (room.log.length > 30) room.log.shift();
 
     // 현재 플레이어의 독 데미지
     if (player.hp > 0 && player.poison > 0) {
@@ -419,8 +426,10 @@ io.on("connection", socket => {
 
     const wasPlaying = room.status === "playing";
     const wasCurrentTurn = removedIndex === room.turn;
+    const leavingName = room.players[removedIndex].name;
 
     room.players.splice(removedIndex, 1);
+    room.log.push(leavingName + " 님이 접속을 종료했어.");
 
     if (room.players.length === 0) {
       rooms.delete(roomName);
@@ -432,15 +441,12 @@ io.on("connection", socket => {
     }
 
     if (wasPlaying) {
-      if (removedIndex < room.turn) {
-        room.turn--;
-      } else if (wasCurrentTurn) {
+      if (wasCurrentTurn) {
+        room.turn = removedIndex - 1;
+        nextTurn(room);
+      } else if (removedIndex < room.turn) {
         room.turn--;
       }
-
-      room.turn = Math.max(0, room.turn);
-
-      nextTurn(room);
     }
 
     sendStates(room);
