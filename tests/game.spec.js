@@ -88,3 +88,18 @@ test("the next player becomes host and can start after the original host leaves"
     await thirdContext.close();
   }
 });
+
+
+test("a player can start a solo match against three bots", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#playerName").fill("SoloPlaywright");
+  await page.locator("#botCount").selectOption("3");
+  await page.locator("#difficulty").selectOption("hard");
+  await page.getByRole("button", { name: "봇과 게임 시작" }).click();
+
+  await expect(page.locator("#battle")).toBeVisible();
+  await expect(page.locator("#players .player")).toHaveCount(4);
+  await expect(page.locator("#turnText")).toContainText("SoloPlaywright");
+  await expect(page.locator("#hand .card")).toHaveCount(3);
+  await expect(page.locator("#hand .card").first()).toBeEnabled();
+});

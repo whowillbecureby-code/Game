@@ -353,3 +353,129 @@ test("poison damage is absorbed by an active shield", async () => {
     await closeClients(match.clients);
   }
 });
+
+
+test("solo mode creates one to three bots and bots take automatic legal turns", async () => {
+  const client = connect(baseUrl, { transports: ["websocket"], reconnection: false });
+  try {
+    if (!client.connected) await waitFor(client, "connect");
+    const joined = waitFor(client, "roomJoined");
+    const initialState = waitFor(client, "gameState");
+    client.emit("createSoloGame", {
+      playerName: "SoloHero",
+      botCount: 1,
+      difficulty: "normal"
+    });
+    const joinedData = await joined;
+    await initialState;
+
+    const room = rooms.get(joinedData.roomName);
+    assert.equal(room.solo, true);
+    assert.equal(room.players.length, 2);
+    assert.equal(room.players[0].name, "SoloHero");
+    assert.equal(room.players[1].isBot, true);
+    assert.equal(room.players.every(player => player.hand.length === 3), true);
+
+    room.players[0].hand = ["strike"];
+    room.players[1].hand = ["strike", "strike", "strike", "strike", "strike"];
+    const afterHumanTurn = waitFor(client, "gameState");
+    client.emit("playCard", {
+      cardId: "strike",
+      targetId: room.players[1].id
+    });
+    await afterHumanTurn;
+
+    const afterBotTurn = waitFor(client, "gameState", 4000);
+    const state = await afterBotTurn;
+    assert.equal(room.players[1].hp, 92);
+    assert.equal(room.players[0].hp, 92);
+    assert.equal(room.players[room.turn].id, client.id);
+    assert.equal(state.status, "playing");
+  } finally {
+    client.disconnect();
+  }
+});
+
+test("solo mode rejects invalid bot counts and difficulty values", async () => {
+  const client = connect(baseUrl, { transports: ["websocket"], reconnection: false });
+  try {
+    if (!client.connected) await waitFor(client, "connect");
+    const error = waitFor(client, "errorMessage");
+    client.emit("createSoloGame", {
+      playerName: "SoloHero",
+      botCount: 4,
+      difficulty: "impossible"
+    });
+    assert.match(await error, /싱글플레이 설정/);
+  } finally {
+    await closeClients([client]);
+  }
+});
+
+
+test("a player already in a multiplayer room cannot start a solo room", async () => {
+  const match = await createMatch(["Host"], { start: false });
+  try {
+    const error = waitFor(match.clients[0], "errorMessage");
+    match.clients[0].emit("createSoloGame", {
+      playerName: "Host",
+      botCount: 1,
+      difficulty: "normal"
+    });
+    assert.match(await error, /이미 참가 중인 방/);
+    assert.equal(match.room.players.length, 1);
+    assert.equal(rooms.has("solo-" + match.clients[0].id), false);
+  } finally {
+    await closeClients(match.clients);
+  }
+});
+
+
+test("three bots take consecutive turns and return control to the human", async () => {
+  const client = connect(baseUrl, { transports: ["websocket"], reconnection: false });
+  try {
+    if (!client.connected) await waitFor(client, "connect");
+    const joined = waitFor(client, "roomJoined");
+    const initialState = waitFor(client, "gameState");
+    client.emit("createSoloGame", {
+      playerName: "SoloHero",
+      botCount: 3,
+      difficulty: "hard"
+    });
+    const joinedData = await joined;
+    await initialState;
+    const room = rooms.get(joinedData.roomName);
+    assert.equal(room.players.length, 4);
+    assert.equal(room.players.filter(player => player.isBot).length, 3);
+
+    room.players[0].hand = ["strike"];
+    const fullCycle = new Promise((resolve, reject) => {
+      let received = 0;
+      const timer = setTimeout(() => {
+        client.off("gameState", onState);
+        reject(new Error("Timed out waiting for the human turn to return"));
+      }, 5000);
+      function onState() {
+        received++;
+        if (received === 4) {
+          clearTimeout(timer);
+          client.off("gameState", onState);
+          resolve();
+        }
+      }
+      client.on("gameState", onState);
+    });
+    client.emit("playCard", {
+      cardId: "strike",
+      targetId: room.players[1].id
+    });
+    await fullCycle;
+
+    assert.equal(room.status, "playing");
+    assert.equal(room.players[room.turn].id, client.id);
+    assert.equal(room.log.filter(entry => entry.includes("님이")).length, 4);
+    assert.equal(room.players.slice(1).every(player => player.hp > 0), true);
+  } finally {
+    client.disconnect();
+  }
+});
