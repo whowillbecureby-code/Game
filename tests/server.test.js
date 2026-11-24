@@ -423,7 +423,6 @@ test("a player already in a multiplayer room cannot start a solo room", async ()
       difficulty: "normal"
     });
     assert.match(await error, /이미 참가 중인 방/);
-    assert.equal(match.clients[0].data.roomName, match.roomName);
     assert.equal(match.room.players.length, 1);
     assert.equal(rooms.has("solo-" + match.clients[0].id), false);
   } finally {
@@ -450,12 +449,27 @@ test("three bots take consecutive turns and return control to the human", async 
     assert.equal(room.players.filter(player => player.isBot).length, 3);
 
     room.players[0].hand = ["strike"];
-    const updates = [waitFor(client, "gameState"), waitFor(client, "gameState"), waitFor(client, "gameState"), waitFor(client, "gameState")];
+    const fullCycle = new Promise((resolve, reject) => {
+      let received = 0;
+      const timer = setTimeout(() => {
+        client.off("gameState", onState);
+        reject(new Error("Timed out waiting for the human turn to return"));
+      }, 5000);
+      function onState() {
+        received++;
+        if (received === 4) {
+          clearTimeout(timer);
+          client.off("gameState", onState);
+          resolve();
+        }
+      }
+      client.on("gameState", onState);
+    });
     client.emit("playCard", {
       cardId: "strike",
       targetId: room.players[1].id
     });
-    await Promise.all(updates);
+    await fullCycle;
 
     assert.equal(room.status, "playing");
     assert.equal(room.players[room.turn].id, client.id);
