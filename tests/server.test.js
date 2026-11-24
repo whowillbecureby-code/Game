@@ -353,3 +353,61 @@ test("poison damage is absorbed by an active shield", async () => {
     await closeClients(match.clients);
   }
 });
+
+
+test("solo mode creates one to three bots and bots take automatic legal turns", async () => {
+  const client = connect(baseUrl, { transports: ["websocket"], reconnection: false });
+  try {
+    if (!client.connected) await waitFor(client, "connect");
+    const joined = waitFor(client, "roomJoined");
+    const initialState = waitFor(client, "gameState");
+    client.emit("createSoloGame", {
+      playerName: "SoloHero",
+      botCount: 1,
+      difficulty: "normal"
+    });
+    const joinedData = await joined;
+    await initialState;
+
+    const room = rooms.get(joinedData.roomName);
+    assert.equal(room.solo, true);
+    assert.equal(room.players.length, 2);
+    assert.equal(room.players[0].name, "SoloHero");
+    assert.equal(room.players[1].isBot, true);
+    assert.equal(room.players.every(player => player.hand.length === 3), true);
+
+    room.players[0].hand = ["strike"];
+    room.players[1].hand = ["strike"];
+    const afterHumanTurn = waitFor(client, "gameState");
+    client.emit("playCard", {
+      cardId: "strike",
+      targetId: room.players[1].id
+    });
+    await afterHumanTurn;
+
+    const afterBotTurn = waitFor(client, "gameState", 4000);
+    const state = await afterBotTurn;
+    assert.equal(room.players[1].hp, 92);
+    assert.equal(room.players[0].hp, 92);
+    assert.equal(room.players[room.turn].id, client.id);
+    assert.equal(state.status, "playing");
+  } finally {
+    client.disconnect();
+  }
+});
+
+test("solo mode rejects invalid bot counts and difficulty values", async () => {
+  const client = connect(baseUrl, { transports: ["websocket"], reconnection: false });
+  try {
+    if (!client.connected) await waitFor(client, "connect");
+    const error = waitFor(client, "errorMessage");
+    client.emit("createSoloGame", {
+      playerName: "SoloHero",
+      botCount: 4,
+      difficulty: "impossible"
+    });
+    assert.match(await error, /싱글플레이 설정/);
+  } finally {
+    await closeClients([client]);
+  }
+});
