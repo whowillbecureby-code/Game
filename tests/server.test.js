@@ -411,3 +411,22 @@ test("solo mode rejects invalid bot counts and difficulty values", async () => {
     await closeClients([client]);
   }
 });
+
+
+test("a player already in a multiplayer room cannot start a solo room", async () => {
+  const match = await createMatch(["Host"], { start: false });
+  try {
+    const error = waitFor(match.clients[0], "errorMessage");
+    match.clients[0].emit("createSoloGame", {
+      playerName: "Host",
+      botCount: 1,
+      difficulty: "normal"
+    });
+    assert.match(await error, /이미 참가 중인 방/);
+    assert.equal(match.clients[0].data.roomName, match.roomName);
+    assert.equal(match.room.players.length, 1);
+    assert.equal(rooms.has("solo-" + match.clients[0].id), false);
+  } finally {
+    await closeClients(match.clients);
+  }
+});
