@@ -271,6 +271,12 @@ io.on("connection", socket => {
 
   // 싱글플레이: 실제 서버 전투 규칙을 사용하는 봇 대전
   socket.on("createSoloGame", ({ playerName, botCount = 1, difficulty = "normal" } = {}) => {
+    const existingRoom = rooms.get(socket.data.roomName);
+    if (existingRoom) {
+      socket.emit("errorMessage", "이미 참가 중인 방이 있어. 현재 방을 나간 뒤 시작해 줘.");
+      return;
+    }
+
     if (!playerName || ![1, 2, 3].includes(Number(botCount)) ||
         !["easy", "normal", "hard"].includes(difficulty)) {
       socket.emit("errorMessage", "싱글플레이 설정을 확인해 줘.");
