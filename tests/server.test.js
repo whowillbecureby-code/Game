@@ -430,3 +430,38 @@ test("a player already in a multiplayer room cannot start a solo room", async ()
     await closeClients(match.clients);
   }
 });
+
+
+test("three bots take consecutive turns and return control to the human", async () => {
+  const client = connect(baseUrl, { transports: ["websocket"], reconnection: false });
+  try {
+    if (!client.connected) await waitFor(client, "connect");
+    const joined = waitFor(client, "roomJoined");
+    const initialState = waitFor(client, "gameState");
+    client.emit("createSoloGame", {
+      playerName: "SoloHero",
+      botCount: 3,
+      difficulty: "hard"
+    });
+    const joinedData = await joined;
+    await initialState;
+    const room = rooms.get(joinedData.roomName);
+    assert.equal(room.players.length, 4);
+    assert.equal(room.players.filter(player => player.isBot).length, 3);
+
+    room.players[0].hand = ["strike"];
+    const updates = [waitFor(client, "gameState"), waitFor(client, "gameState"), waitFor(client, "gameState"), waitFor(client, "gameState")];
+    client.emit("playCard", {
+      cardId: "strike",
+      targetId: room.players[1].id
+    });
+    await Promise.all(updates);
+
+    assert.equal(room.status, "playing");
+    assert.equal(room.players[room.turn].id, client.id);
+    assert.equal(room.players[0].hp < 100, true);
+    assert.equal(room.players.slice(1).every(player => player.hp > 0), true);
+  } finally {
+    client.disconnect();
+  }
+});
