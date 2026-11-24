@@ -77,6 +77,7 @@ function nextTurn(room) {
 // 게임 상태 전송
 function sendStates(room) {
   room.players.forEach(player => {
+    if (player.isBot) return;
     io.to(player.id).emit("gameState", {
       playerId: player.id,
       isHost: room.host === player.id,
@@ -101,6 +102,121 @@ function sendStates(room) {
       }))
     });
   });
+}
+
+
+function applyCard(room, player, cardId, targetId) {
+  const index = player.hand.indexOf(cardId);
+  if (index < 0 || !CARDS[cardId] || player.hp <= 0) return false;
+  const card = CARDS[cardId];
+  const needsTarget = ["attack", "poison", "drain"].includes(card.type);
+  const target = needsTarget
+    ? room.players.find(p => p.id === targetId && p.hp > 0 && p.id !== player.id)
+    : null;
+  if (needsTarget && !target) return false;
+
+  function damage(targetPlayer, amount) {
+    if (!targetPlayer || targetPlayer.hp <= 0) return;
+    if (targetPlayer.shield > 0) {
+      const blocked = Math.min(targetPlayer.shield, amount);
+      targetPlayer.shield -= blocked;
+      amount -= blocked;
+    }
+    targetPlayer.hp = Math.max(0, targetPlayer.hp - amount);
+    if (targetPlayer.reflect && amount > 0) {
+      targetPlayer.reflect = false;
+      player.hp = Math.max(0, player.hp - 5);
+    }
+  }
+
+  if (card.type === "attack") {
+    damage(target, card.random ? Math.floor(Math.random() * 25) + 1 : card.damage);
+  }
+  if (card.type === "self") {
+    if (cardId === "guard") player.shield += card.shield;
+    if (cardId === "reflect") player.reflect = true;
+  }
+  if (card.type === "heal") player.hp = Math.min(100, player.hp + card.amount);
+  if (card.type === "poison") target.poison = 2;
+  if (card.type === "drain") {
+    damage(target, card.damage);
+    player.hp = Math.min(100, player.hp + 5);
+  }
+  if (card.type === "all") {
+    room.players.forEach(p => {
+      if (p.id !== player.id && p.hp > 0) damage(p, card.damage);
+    });
+  }
+  if (card.type === "cleanse") {
+    player.poison = 0;
+    player.hp = Math.min(100, player.hp + card.amount);
+  }
+
+  player.hand.splice(index, 1);
+  room.log.push(player.name + " 님이 " + card.name + " 사용");
+  if (room.log.length > 30) room.log.shift();
+  if (player.hp > 0 && player.poison > 0) {
+    damage(player, 3);
+    player.poison--;
+  }
+  nextTurn(room);
+  return true;
+}
+
+function chooseBotMove(room, bot) {
+  const livingEnemies = room.players.filter(p => p.hp > 0 && p.id !== bot.id);
+  const target = livingEnemies.slice().sort((a, b) => a.hp + a.shield - (b.hp + b.shield))[0];
+  const difficulty = room.difficulty || "normal";
+  const cards = bot.hand;
+
+  const priority = cardId => {
+    const c = CARDS[cardId];
+    if (cardId === "cleanse" && bot.poison > 0) return 120;
+    if ((cardId === "heal" || cardId === "drain") && bot.hp <= (difficulty === "hard" ? 65 : 48)) return 100;
+    if (cardId === "guard" && bot.shield < 5 && bot.hp < 85) return 65;
+    if (cardId === "reflect" && !bot.reflect && livingEnemies.length) return 55;
+    if (cardId === "lightning" && livingEnemies.length >= 2) return 75;
+    if (["strike", "heavy", "chaos", "poison", "drain"].includes(cardId) && target) {
+      let score = cardId === "heavy" ? 70 : cardId === "drain" ? 68 : cardId === "poison" ? 62 : cardId === "chaos" ? 58 : 50;
+      if (target.hp <= (c.damage || 8)) score += 18;
+      if (cardId === "poison" && target.poison > 0) score -= 20;
+      return score;
+    }
+    if (cardId === "heal" && bot.hp < 92) return 45;
+    if (cardId === "guard") return 25;
+    return 5;
+  };
+
+  const ranked = cards.map(id => ({ id, score: priority(id) }))
+    .sort((a, b) => b.score - a.score);
+  const chosen = difficulty === "easy"
+    ? cards[Math.floor(Math.random() * cards.length)]
+    : difficulty === "normal" && Math.random() < 0.35
+      ? cards[Math.floor(Math.random() * cards.length)]
+      : ranked[0]?.id;
+
+  const chosenCard = CARDS[chosen];
+  const chosenTarget = chosenCard && ["attack", "poison", "drain"].includes(chosenCard.type)
+    ? target?.id
+    : null;
+  return { cardId: chosen, targetId: chosenTarget };
+}
+
+function scheduleBotTurn(room) {
+  if (!room || !room.solo || room.status !== "playing") return;
+  const current = room.players[room.turn];
+  if (!current?.isBot) return;
+
+  setTimeout(() => {
+    if (room.status !== "playing" || room.players[room.turn]?.id !== current.id) return;
+    const move = chooseBotMove(room, current);
+    if (!move.cardId || !applyCard(room, current, move.cardId, move.targetId)) {
+      // A bot should always have a legal move; recover safely if state changed.
+      nextTurn(room);
+    }
+    sendStates(room);
+    scheduleBotTurn(room);
+  }, 650);
 }
 
 io.on("connection", socket => {
@@ -149,6 +265,51 @@ io.on("connection", socket => {
       host: true
     });
 
+    sendStates(room);
+  });
+
+
+  // 싱글플레이: 실제 서버 전투 규칙을 사용하는 봇 대전
+  socket.on("createSoloGame", ({ playerName, botCount = 1, difficulty = "normal" } = {}) => {
+    if (!playerName || ![1, 2, 3].includes(Number(botCount)) ||
+        !["easy", "normal", "hard"].includes(difficulty)) {
+      socket.emit("errorMessage", "싱글플레이 설정을 확인해 줘.");
+      return;
+    }
+
+    const roomName = "solo-" + socket.id;
+    const players = [{
+      id: socket.id, name: playerName, hp: 100, shield: 0,
+      poison: 0, reflect: false, hand: [], isBot: false
+    }];
+
+    for (let i = 0; i < Number(botCount); i++) {
+      players.push({
+        id: "bot-" + socket.id + "-" + i,
+        name: ["전투 봇", "전략 봇", "도전 봇"][i],
+        hp: 100, shield: 0, poison: 0, reflect: false,
+        hand: [], isBot: true
+      });
+    }
+
+    const room = {
+      name: roomName, host: socket.id, players,
+      turn: 0, status: "playing", winner: null,
+      difficulty, solo: true,
+      log: ["싱글플레이가 시작됐어. 봇들과 승부해 봐!"]
+    };
+
+    players.forEach(p => {
+      for (let i = 0; i < 3; i++) {
+        const card = drawCard(p);
+        if (card) p.hand.push(card);
+      }
+    });
+
+    rooms.set(roomName, room);
+    socket.join(roomName);
+    socket.data.roomName = roomName;
+    socket.emit("roomJoined", { roomName, host: true, solo: true });
     sendStates(room);
   });
 
@@ -221,195 +382,39 @@ io.on("connection", socket => {
     sendStates(room);
   });
 
+
   // 카드 사용
   socket.on("playCard", (data = {}) => {
     const { cardId, targetId } = data;
-
-    console.log("카드 요청:", {
-      player: socket.id,
-      cardId,
-      targetId
-    });
-
     const room = rooms.get(socket.data.roomName);
 
     if (!room || room.status !== "playing") {
       socket.emit("errorMessage", "게임이 진행 중이 아니야.");
       return;
     }
-
-    const player = room.players.find(
-      p => p.id === socket.id
-    );
-
+    const player = room.players.find(p => p.id === socket.id);
     if (!player) {
       socket.emit("errorMessage", "플레이어를 찾을 수 없어.");
       return;
     }
-
-    if (
-      !room.players[room.turn] ||
-      room.players[room.turn].id !== socket.id
-    ) {
+    if (room.players[room.turn]?.id !== socket.id) {
       socket.emit("errorMessage", "네 턴이 아니야.");
       return;
     }
-
     if (player.hp <= 0) {
       socket.emit("errorMessage", "탈락한 플레이어야.");
       return;
     }
-
-    const index = player.hand.indexOf(cardId);
-
-    if (index === -1) {
+    if (!player.hand.includes(cardId)) {
       socket.emit("errorMessage", "손패에 없는 카드야.");
       return;
     }
-
-    const card = CARDS[cardId];
-
-    if (!card) {
-      socket.emit("errorMessage", "존재하지 않는 카드야.");
+    if (!applyCard(room, player, cardId, targetId)) {
+      socket.emit("errorMessage", "카드 대상을 다시 선택해 줘.");
       return;
     }
-
-    const needsTarget = [
-      "attack",
-      "poison",
-      "drain"
-    ].includes(card.type);
-
-    let target = null;
-
-    if (needsTarget) {
-      target = room.players.find(
-        p => p.id === targetId && p.hp > 0
-      );
-
-      if (!target || target.id === player.id) {
-        socket.emit(
-          "errorMessage",
-          "공격 대상을 다시 선택해 줘."
-        );
-        return;
-      }
-    }
-
-    // 피해 계산
-    function damage(targetPlayer, amount) {
-      if (!targetPlayer || targetPlayer.hp <= 0) return;
-
-      if (targetPlayer.shield > 0) {
-        const blocked = Math.min(
-          targetPlayer.shield,
-          amount
-        );
-
-        targetPlayer.shield -= blocked;
-        amount -= blocked;
-      }
-
-      targetPlayer.hp = Math.max(
-        0,
-        targetPlayer.hp - amount
-      );
-
-      if (targetPlayer.reflect && amount > 0) {
-        targetPlayer.reflect = false;
-
-        player.hp = Math.max(
-          0,
-          player.hp - 5
-        );
-      }
-    }
-
-    // 일반 공격 및 혼돈의 일격
-    if (card.type === "attack") {
-      const amount = card.random
-        ? Math.floor(Math.random() * 25) + 1
-        : card.damage;
-
-      console.log("공격 데미지:", amount);
-
-      damage(target, amount);
-    }
-
-    // 방어 및 반사
-    if (card.type === "self") {
-      if (cardId === "guard") {
-        player.shield += card.shield;
-      }
-
-      if (cardId === "reflect") {
-        player.reflect = true;
-      }
-    }
-
-    // 치유
-    if (card.type === "heal") {
-      player.hp = Math.min(
-        100,
-        player.hp + card.amount
-      );
-    }
-
-    // 맹독
-    if (card.type === "poison") {
-      target.poison = 2;
-    }
-
-    // 흡수
-    if (card.type === "drain") {
-      damage(target, card.damage);
-
-      player.hp = Math.min(
-        100,
-        player.hp + 5
-      );
-    }
-
-    // 전체 공격
-    if (card.type === "all") {
-      room.players.forEach(p => {
-        if (p.id !== player.id && p.hp > 0) {
-          damage(p, card.damage);
-        }
-      });
-    }
-
-    // 정화
-    if (card.type === "cleanse") {
-      player.poison = 0;
-
-      player.hp = Math.min(
-        100,
-        player.hp + card.amount
-      );
-    }
-
-    // 사용한 카드 제거
-    player.hand.splice(index, 1);
-
-    const actionText = player.name + " 님이 " + card.name + " 사용";
-    console.log(actionText);
-    room.log.push(actionText);
-    if (room.log.length > 30) room.log.shift();
-
-    // 현재 플레이어의 독 데미지
-    if (player.hp > 0 && player.poison > 0) {
-      damage(player, 3);
-      player.poison--;
-    }
-
-    // 다음 턴
-    nextTurn(room);
-
-    // 모든 플레이어에게 최신 상태 전송
     sendStates(room);
-
-    console.log("다음 턴:", room.players[room.turn]?.name);
+    scheduleBotTurn(room);
   });
 
   // 접속 종료
