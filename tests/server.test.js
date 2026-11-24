@@ -377,7 +377,7 @@ test("solo mode creates one to three bots and bots take automatic legal turns", 
     assert.equal(room.players.every(player => player.hand.length === 3), true);
 
     room.players[0].hand = ["strike"];
-    room.players[1].hand = ["strike"];
+    room.players[1].hand = ["strike", "strike", "strike", "strike", "strike"];
     const afterHumanTurn = waitFor(client, "gameState");
     client.emit("playCard", {
       cardId: "strike",
