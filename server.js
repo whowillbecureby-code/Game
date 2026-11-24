@@ -430,6 +430,13 @@ io.on("connection", socket => {
 
     if (removedIndex === -1) return;
 
+    // A solo match has no other human to preserve; stop pending bot turns on exit.
+    if (room.solo) {
+      room.status = "finished";
+      rooms.delete(roomName);
+      return;
+    }
+
     const wasPlaying = room.status === "playing";
     const wasCurrentTurn = removedIndex === room.turn;
     const leavingName = room.players[removedIndex].name;
