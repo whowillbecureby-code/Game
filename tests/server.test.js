@@ -459,7 +459,7 @@ test("three bots take consecutive turns and return control to the human", async 
 
     assert.equal(room.status, "playing");
     assert.equal(room.players[room.turn].id, client.id);
-    assert.equal(room.players[0].hp < 100, true);
+    assert.equal(room.log.filter(entry => entry.includes("님이")).length, 4);
     assert.equal(room.players.slice(1).every(player => player.hp > 0), true);
   } finally {
     client.disconnect();
