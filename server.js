@@ -12,16 +12,16 @@ app.use(express.static("public"));
 const rooms = new Map();
 
 const CARDS = {
-  strike: { name: "검격", type: "attack", damage: 8 },
-  heavy: { name: "강타", type: "attack", damage: 14 },
-  guard: { name: "수호", type: "self", shield: 10 },
-  heal: { name: "치유", type: "heal", amount: 9 },
-  poison: { name: "맹독", type: "poison", damage: 3 },
-  drain: { name: "흡수", type: "drain", damage: 5 },
-  reflect: { name: "반사", type: "self" },
-  chaos: { name: "혼돈의 일격", type: "attack", random: true },
-  lightning: { name: "낙뢰", type: "all", damage: 5 },
-  cleanse: { name: "정화", type: "cleanse", amount: 5 }
+  strike: { name: "검격", type: "attack", damage: 8, text: "적 한 명에게 8 피해" },
+  heavy: { name: "강타", type: "attack", damage: 14, text: "적 한 명에게 14 피해" },
+  guard: { name: "수호", type: "self", shield: 10, text: "자신에게 보호막 10 부여" },
+  heal: { name: "치유", type: "heal", amount: 9, text: "자신의 체력 9 회복" },
+  poison: { name: "맹독", type: "poison", damage: 3, text: "적 한 명을 2턴 중독시킴 (행동 후 3 피해)" },
+  drain: { name: "흡수", type: "drain", damage: 5, text: "적에게 5 피해, 자신의 체력 5 회복" },
+  reflect: { name: "반사", type: "self", text: "다음 공격 1회 반사, 공격자에게 5 피해" },
+  chaos: { name: "혼돈의 일격", type: "attack", random: true, text: "적 한 명에게 1~25 랜덤 피해" },
+  lightning: { name: "낙뢰", type: "all", damage: 5, text: "모든 생존 적에게 각각 5 피해" },
+  cleanse: { name: "정화", type: "cleanse", amount: 5, text: "중독 제거 + 자신의 체력 5 회복" }
 };
 
 // 중복되지 않는 카드 뽑기
