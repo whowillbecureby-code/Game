@@ -82,17 +82,41 @@ button:disabled {
   color: white;
   text-align: left;
   border: 2px solid #e8bd67;
-  min-height: 105px;
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 
 .card strong {
   display: block;
-  margin-bottom: 8px;
   font-size: 17px;
+  line-height: 1.25;
 }
 
-.card small {
-  color: #ddd;
+.card-type {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #53617d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.card-description {
+  color: #e3e8f2;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: normal;
 }
 
 .hp {
@@ -380,6 +404,18 @@ socket.on("gameState", data => {
 
 });
 
+// 카드 종류를 플레이어가 쉽게 알아볼 수 있는 이름으로 표시
+function cardCategory(card) {
+  if (card.id === "guard") return "방어";
+  if (card.id === "reflect") return "반사";
+  if (card.id === "heal") return "회복";
+  if (card.id === "cleanse") return "정화·회복";
+  if (card.id === "poison") return "상태이상";
+  if (card.id === "drain") return "공격·회복";
+  if (card.id === "lightning") return "전체 공격";
+  return "공격";
+}
+
 // 손패 출력
 
 function renderHand(hand) {
@@ -401,8 +437,13 @@ function renderHand(hand) {
     button.disabled = !canPlay;
 
     button.innerHTML =
-      "<strong>" + safe(card.name) + "</strong>" +
-      "<small>" + safe(card.text || card.name) + "</small>";
+      '<div class="card-top">' +
+        "<strong>" + safe(card.name) + "</strong>" +
+        '<span class="card-type">' + safe(cardCategory(card)) + "</span>" +
+      "</div>" +
+      '<span class="card-description">' +
+        safe(card.text || "카드 효과 정보 없음") +
+      "</span>";
 
     button.onclick = () => {
 
