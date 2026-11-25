@@ -1,6 +1,8 @@
 const { after, before, test } = require("node:test");
 const assert = require("node:assert/strict");
 const { io: connect } = require("socket.io-client");
+const fs = require("node:fs");
+const path = require("node:path");
 const { server, io, rooms, CARDS } = require("../server");
 
 let baseUrl;
@@ -91,6 +93,9 @@ test("the server exposes the complete eleven-card catalog with player-facing des
   assert.match(CARDS.drain.text, /5 피해.*5 회복/);
   assert.match(CARDS.lightning.text, /모든 생존 적/);
   assert.match(CARDS.shield_breaker.text, /보호막을 전부 제거/);
+  const html = fs.readFileSync(path.join(__dirname, "../public/index.html"), "utf8");
+  assert.match(html, /"drain",\s*"special"/, "special cards should open the opponent target picker");
+  assert.match(html, /card\.id === "shield_breaker"\) return "특수"/);
 });
 
 test("every multiplayer player starts with four cards and first turns do not draw extras", async () => {
