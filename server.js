@@ -155,6 +155,9 @@ function applyCard(room, player, cardId, targetId) {
     player.poison = 0;
     player.hp = Math.min(100, player.hp + card.amount);
   }
+  if (card.type === "special" && cardId === "shield_breaker") {
+    target.shield = 0;
+  }
 
   player.hand.splice(index, 1);
   room.log.push(player.name + " 님이 " + card.name + " 사용");
@@ -179,7 +182,8 @@ function chooseBotMove(room, bot) {
     if ((cardId === "heal" || cardId === "drain") && bot.hp <= (difficulty === "hard" ? 65 : 48)) return 100;
     if (cardId === "guard" && bot.shield < 5 && bot.hp < 85) return 65;
     if (cardId === "reflect" && !bot.reflect && livingEnemies.length) return 55;
-    if (cardId === "lightning" && livingEnemies.length >= 2) return 75;\n    if (cardId === "shield_breaker" && target?.shield > 0) return 80;
+    if (cardId === "lightning" && livingEnemies.length >= 2) return 75;
+    if (cardId === "shield_breaker" && target?.shield > 0) return 80;
     if (["strike", "heavy", "chaos", "poison", "drain"].includes(cardId) && target) {
       let score = cardId === "heavy" ? 70 : cardId === "drain" ? 68 : cardId === "poison" ? 62 : cardId === "chaos" ? 58 : 50;
       if (target.hp <= (c.damage || 8)) score += 18;
