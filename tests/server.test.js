@@ -79,11 +79,17 @@ after(async () => {
   await new Promise(resolve => io.close(resolve));
 });
 
-test("the server exposes the complete ten-card catalog", () => {
+test("the server exposes the complete ten-card catalog with player-facing descriptions", () => {
   assert.deepEqual(Object.keys(CARDS), [
     "strike", "heavy", "guard", "heal", "poison",
     "drain", "reflect", "chaos", "lightning", "cleanse"
   ]);
+  for (const [id, card] of Object.entries(CARDS)) {
+    assert.ok(card.text && card.text.length > 0, id + " should have a card description");
+  }
+  assert.match(CARDS.poison.text, /2턴/);
+  assert.match(CARDS.drain.text, /5 피해.*5 회복/);
+  assert.match(CARDS.lightning.text, /모든 생존 적/);
 });
 
 test("every multiplayer player starts with four cards and first turns do not draw extras", async () => {

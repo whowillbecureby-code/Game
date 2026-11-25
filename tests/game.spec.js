@@ -40,6 +40,8 @@ test("two players can join a room and the host can start a match", async ({ brow
     await expect(guest.locator("#hand .card")).toHaveCount(4);
     await expect(host.locator("#hand .card").first()).toBeEnabled();
     await expect(guest.locator("#hand .card").first()).toBeDisabled();
+    await expect(host.locator("#hand .card-description").first()).not.toBeEmpty();
+    await expect(host.locator("#hand .card-type").first()).not.toBeEmpty();
   } finally {
     await hostContext.close();
     await guestContext.close();
