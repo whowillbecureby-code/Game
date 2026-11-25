@@ -1,6 +1,8 @@
 const { after, before, test } = require("node:test");
 const assert = require("node:assert/strict");
 const { io: connect } = require("socket.io-client");
+const fs = require("node:fs");
+const path = require("node:path");
 const { server, io, rooms, CARDS } = require("../server");
 
 let baseUrl;
@@ -79,10 +81,10 @@ after(async () => {
   await new Promise(resolve => io.close(resolve));
 });
 
-test("the server exposes the complete ten-card catalog with player-facing descriptions", () => {
+test("the server exposes the complete eleven-card catalog with player-facing descriptions", () => {
   assert.deepEqual(Object.keys(CARDS), [
     "strike", "heavy", "guard", "heal", "poison",
-    "drain", "reflect", "chaos", "lightning", "cleanse"
+    "drain", "reflect", "chaos", "lightning", "cleanse", "shield_breaker"
   ]);
   for (const [id, card] of Object.entries(CARDS)) {
     assert.ok(card.text && card.text.length > 0, id + " should have a card description");
@@ -90,6 +92,10 @@ test("the server exposes the complete ten-card catalog with player-facing descri
   assert.match(CARDS.poison.text, /2턴/);
   assert.match(CARDS.drain.text, /5 피해.*5 회복/);
   assert.match(CARDS.lightning.text, /모든 생존 적/);
+  assert.match(CARDS.shield_breaker.text, /보호막을 전부 제거/);
+  const html = fs.readFileSync(path.join(__dirname, "../public/index.html"), "utf8");
+  assert.match(html, /"drain",\s*"special"/, "special cards should open the opponent target picker");
+  assert.match(html, /card\.id === "shield_breaker"\) return "특수"/);
 });
 
 test("every multiplayer player starts with four cards and first turns do not draw extras", async () => {
@@ -137,6 +143,20 @@ test("guard creates a ten-point shield and incoming damage consumes shield first
     await play(match.clients, 1, "strike", match.clients[0].id);
     assert.equal(match.room.players[0].shield, 2);
     assert.equal(match.room.players[0].hp, 100);
+  } finally {
+    await closeClients(match.clients);
+  }
+});
+
+
+test("shield breaker removes all shield from one opponent without dealing HP damage", async () => {
+  const match = await createMatch();
+  try {
+    match.room.players[1].shield = 18;
+    match.room.players[0].hand = ["shield_breaker"];
+    await play(match.clients, 0, "shield_breaker", match.clients[1].id);
+    assert.equal(match.room.players[1].shield, 0);
+    assert.equal(match.room.players[1].hp, 100);
   } finally {
     await closeClients(match.clients);
   }

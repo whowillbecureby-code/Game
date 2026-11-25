@@ -413,6 +413,7 @@ function cardCategory(card) {
   if (card.id === "poison") return "상태이상";
   if (card.id === "drain") return "공격·회복";
   if (card.id === "lightning") return "전체 공격";
+  if (card.id === "shield_breaker") return "특수";
   return "공격";
 }
 
@@ -490,7 +491,8 @@ function renderTargets() {
   const needsTarget = [
     "attack",
     "poison",
-    "drain"
+    "drain",
+    "special"
   ].includes(selected.type);
 
   if (!needsTarget) {
