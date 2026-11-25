@@ -89,7 +89,8 @@ test("the server exposes the complete eleven-card catalog with player-facing des
   }
   assert.match(CARDS.poison.text, /2턴/);
   assert.match(CARDS.drain.text, /5 피해.*5 회복/);
-  assert.match(CARDS.lightning.text, /모든 생존 적/);\n  assert.match(CARDS.shield_breaker.text, /보호막을 전부 제거/);
+  assert.match(CARDS.lightning.text, /모든 생존 적/);
+  assert.match(CARDS.shield_breaker.text, /보호막을 전부 제거/);
 });
 
 test("every multiplayer player starts with four cards and first turns do not draw extras", async () => {
@@ -155,7 +156,8 @@ test("shield breaker removes all shield from one opponent without dealing HP dam
     await closeClients(match.clients);
   }
 });
-\ntest("healing is capped at one hundred HP", async () => {
+
+test("healing is capped at one hundred HP", async () => {
   const match = await createMatch();
   try {
     match.room.players[0].hp = 96;
