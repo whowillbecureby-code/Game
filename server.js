@@ -21,7 +21,8 @@ const CARDS = {
   reflect: { name: "반사", type: "self", text: "다음 공격 1회 반사, 공격자에게 5 피해" },
   chaos: { name: "혼돈의 일격", type: "attack", random: true, text: "적 한 명에게 1~25 랜덤 피해" },
   lightning: { name: "낙뢰", type: "all", damage: 5, text: "모든 생존 적에게 각각 5 피해" },
-  cleanse: { name: "정화", type: "cleanse", amount: 5, text: "중독 제거 + 자신의 체력 5 회복" }
+  cleanse: { name: "정화", type: "cleanse", amount: 5, text: "중독 제거 + 자신의 체력 5 회복" },
+  shield_breaker: { name: "쉴드 브레이커", type: "special", text: "상대 한 명의 보호막을 전부 제거" }
 };
 
 // 중복되지 않는 카드 뽑기
@@ -112,7 +113,7 @@ function applyCard(room, player, cardId, targetId) {
   const index = player.hand.indexOf(cardId);
   if (index < 0 || !CARDS[cardId] || player.hp <= 0) return false;
   const card = CARDS[cardId];
-  const needsTarget = ["attack", "poison", "drain"].includes(card.type);
+  const needsTarget = ["attack", "poison", "drain", "special"].includes(card.type);
   const target = needsTarget
     ? room.players.find(p => p.id === targetId && p.hp > 0 && p.id !== player.id)
     : null;
@@ -178,7 +179,7 @@ function chooseBotMove(room, bot) {
     if ((cardId === "heal" || cardId === "drain") && bot.hp <= (difficulty === "hard" ? 65 : 48)) return 100;
     if (cardId === "guard" && bot.shield < 5 && bot.hp < 85) return 65;
     if (cardId === "reflect" && !bot.reflect && livingEnemies.length) return 55;
-    if (cardId === "lightning" && livingEnemies.length >= 2) return 75;
+    if (cardId === "lightning" && livingEnemies.length >= 2) return 75;\n    if (cardId === "shield_breaker" && target?.shield > 0) return 80;
     if (["strike", "heavy", "chaos", "poison", "drain"].includes(cardId) && target) {
       let score = cardId === "heavy" ? 70 : cardId === "drain" ? 68 : cardId === "poison" ? 62 : cardId === "chaos" ? 58 : 50;
       if (target.hp <= (c.damage || 8)) score += 18;
@@ -199,7 +200,7 @@ function chooseBotMove(room, bot) {
       : ranked[0]?.id;
 
   const chosenCard = CARDS[chosen];
-  const chosenTarget = chosenCard && ["attack", "poison", "drain"].includes(chosenCard.type)
+  const chosenTarget = chosenCard && ["attack", "poison", "drain", "special"].includes(chosenCard.type)
     ? target?.id
     : null;
   return { cardId: chosen, targetId: chosenTarget };
