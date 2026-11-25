@@ -64,8 +64,11 @@ function nextTurn(room) {
 
   const player = room.players[room.turn];
 
-  // 최대 5장, 손패 중복 방지
-  if (player.hand.length < 5) {
+  // 각 플레이어의 첫 턴에는 시작 손패를 그대로 사용하고,
+  // 두 번째 턴부터 턴이 돌아올 때 카드 1장을 보충한다.
+  if (!player.hasStartedTurn) {
+    player.hasStartedTurn = true;
+  } else if (player.hand.length < 5) {
     const card = drawCard(player);
 
     if (card) {
@@ -306,11 +309,12 @@ io.on("connection", socket => {
     };
 
     players.forEach(p => {
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         const card = drawCard(p);
         if (card) p.hand.push(card);
       }
     });
+    players[0].hasStartedTurn = true;
 
     rooms.set(roomName, room);
     socket.join(roomName);
@@ -378,12 +382,14 @@ io.on("connection", socket => {
 
     room.players.forEach(p => {
       p.hand = [];
+      p.hasStartedTurn = false;
 
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         const card = drawCard(p);
         if (card) p.hand.push(card);
       }
     });
+    room.players[0].hasStartedTurn = true;
 
     sendStates(room);
   });

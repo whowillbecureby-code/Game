@@ -36,8 +36,8 @@ test("two players can join a room and the host can start a match", async ({ brow
     await expect(host.locator("#battle")).toBeVisible();
     await expect(guest.locator("#battle")).toBeVisible();
     await expect(host.locator("#turnText")).toContainText("PlaywrightHost");
-    await expect(host.locator("#hand .card")).toHaveCount(3);
-    await expect(guest.locator("#hand .card")).toHaveCount(3);
+    await expect(host.locator("#hand .card")).toHaveCount(4);
+    await expect(guest.locator("#hand .card")).toHaveCount(4);
     await expect(host.locator("#hand .card").first()).toBeEnabled();
     await expect(guest.locator("#hand .card").first()).toBeDisabled();
   } finally {
@@ -100,6 +100,6 @@ test("a player can start a solo match against three bots", async ({ page }) => {
   await expect(page.locator("#battle")).toBeVisible();
   await expect(page.locator("#players .player")).toHaveCount(4);
   await expect(page.locator("#turnText")).toContainText("SoloPlaywright");
-  await expect(page.locator("#hand .card")).toHaveCount(3);
+  await expect(page.locator("#hand .card")).toHaveCount(4);
   await expect(page.locator("#hand .card").first()).toBeEnabled();
 });
