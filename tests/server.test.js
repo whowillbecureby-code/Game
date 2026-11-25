@@ -86,6 +86,23 @@ test("the server exposes the complete ten-card catalog", () => {
   ]);
 });
 
+test("every multiplayer player starts with four cards and first turns do not draw extras", async () => {
+  const match = await createMatch();
+  try {
+    assert.deepEqual(match.room.players.map(player => player.hand.length), [4, 4]);
+
+    match.room.players[0].hand = ["guard"];
+    await play(match.clients, 0, "guard");
+    assert.equal(match.room.players[1].hand.length, 4);
+
+    match.room.players[1].hand = ["guard"];
+    await play(match.clients, 1, "guard");
+    assert.equal(match.room.players[0].hand.length, 1);
+  } finally {
+    await closeClients(match.clients);
+  }
+});
+
 test("strike and heavy apply their exact damage values", async () => {
   const match = await createMatch();
   try {
@@ -374,7 +391,7 @@ test("solo mode creates one to three bots and bots take automatic legal turns", 
     assert.equal(room.players.length, 2);
     assert.equal(room.players[0].name, "SoloHero");
     assert.equal(room.players[1].isBot, true);
-    assert.equal(room.players.every(player => player.hand.length === 3), true);
+    assert.equal(room.players.every(player => player.hand.length === 4), true);
 
     room.players[0].hand = ["strike"];
     room.players[1].hand = ["strike", "strike", "strike", "strike", "strike"];
